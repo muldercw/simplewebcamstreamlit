@@ -1,145 +1,58 @@
 import streamlit as st
-import streamlit.components.v1 as components
-import base64
-from io import BytesIO
-from PIL import Image
+import cv2
 import numpy as np
+from PIL import Image
 
-# Function to apply transformations to the image
-def transform_image(image_data):
-    img = Image.open(BytesIO(image_data))
-    
-    # Example transformation: Convert the image to grayscale
-    grayscale_img = img.convert('L')
-    
-    # Convert the transformed image back to base64 for display
-    buffered = BytesIO()
-    grayscale_img.save(buffered, format="PNG")
-    img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
-    
-    return img_str
+def overlay_image_alpha(img, img_overlay, pos, alpha_mask):
+    """Overlay `img_overlay` on top of `img` at the position `pos` and blend using `alpha_mask`."""
+    x, y = pos
 
-# JavaScript/HTML code for webcam capture with SVG overlay
-html_code = '''
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Webcam Capture with SVG Overlay</title>
-    <style>
-        body {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f0f0f0;
-        }
-        #camera {
-            position: relative;
-        }
-        video, canvas {
-            width: 100%;
-            max-width: 500px;
-        }
-        #svg-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-        }
-        #controls {
-            display: flex;
-            justify-content: center;
-            margin-top: 10px;
-        }
-        #capture {
-            padding: 10px 20px;
-            font-size: 16px;
-        }
-        #captured-images {
-            margin-top: 20px;
-        }
-        #captured-images img {
-            display: block;
-            max-width: 500px;
-            margin-bottom: 10px;
-        }
-    </style>
-</head>
-<body>
-    <div id="camera">
-        <video id="video" autoplay playsinline></video>
-        <canvas id="canvas" style="display: none;"></canvas>
+    # Image ranges
+    y1, y2 = max(0, y), min(img.shape[0], y + img_overlay.shape[0])
+    x1, x2 = max(0, x), min(img.shape[1], x + img_overlay.shape[1])
 
-        <!-- Inline SVG Overlay -->
-        <svg id="svg-overlay" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
-            <g><path style="opacity:1" fill="#fe0000" d="M 329.5,230.5 C 328.3,236.04 326.633,241.54 324.5,247..."></path></g>
-        </svg>
-    </div>
+    # Overlay ranges
+    y1o, y2o = max(0, -y), min(img_overlay.shape[0], img.shape[0] - y)
+    x1o, x2o = max(0, -x), min(img_overlay.shape[1], img.shape[1] - x)
 
-    <div id="controls">
-        <button id="capture">Capture</button>
-    </div>
+    # Exit if there's nothing to overlay
+    if y1 >= y2 or x1 >= x2 or y1o >= y2o or x1o >= x2o:
+        return
 
-    <div id="captured-images"></div>
+    # Blend overlay within the determined range
+    img_crop = img[y1:y2, x1:x2]
+    img_overlay_crop = img_overlay[y1o:y2o, x1o:x2o]
+    alpha = alpha_mask[y1o:y2o, x1o:x2o, np.newaxis] / 255.0
 
-    <script>
-        const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const captureButton = document.getElementById('capture');
-        const capturedImages = document.getElementById('captured-images');
+    img_crop[:] = (1.0 - alpha) * img_crop + alpha * img_overlay_crop
 
-        navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
-            video.srcObject = stream;
-        });
+st.title("Webcam with Transparent PNG Overlay")
 
-        captureButton.addEventListener('click', async () => {
-            const context = canvas.getContext('2d');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+# Checkbox to enable/disable the camera
+enable = st.checkbox("Enable camera")
 
-            // Convert canvas to base64
-            const dataUrl = canvas.toDataURL('image/png');
+# Capture a frame from the webcam, disabled if the checkbox is not checked
+webcam_input = st.camera_input("Capture a frame from your webcam:", disabled=not enable)
 
-            // Send image to Streamlit for processing
-            const response = await fetch('/process_image', {
-                method: 'POST',
-                body: JSON.stringify({ image: dataUrl }),
-                headers: { 'Content-Type': 'application/json' }
-            });
+# If a frame is captured, apply the PNG overlay
+if webcam_input:
+    # Convert the webcam input to an OpenCV image
+    img = Image.open(webcam_input)
+    img = np.array(img)
 
-            const result = await response.json();
-            const img = document.createElement('img');
-            img.src = result.transformed_image;
-            capturedImages.appendChild(img);
-        });
-    </script>
-</body>
-</html>
-'''
+    # Load your transparent PNG image
+    overlay = Image.open("overlay_image.png").convert("RGBA")
+    overlay = np.array(overlay)
 
-# Display the HTML with webcam and overlay
-components.html(html_code, height=700)
+    # Separate the color and alpha channels of the PNG image
+    overlay_img = overlay[:, :, :3]  # Color
+    overlay_alpha = overlay[:, :, 3]  # Alpha channel (transparency)
 
-# Process the captured image from JavaScript
-def process_image():
-    data = st.experimental_get_query_params()  # Simulate endpoint
+    # Position to overlay (center of the captured image)
+    pos = ((img.shape[1] - overlay_img.shape[1]) // 2, (img.shape[0] - overlay_img.shape[0]) // 2)
 
-    if "image" in data:
-        image_base64 = data["image"][0]
-        image_data = base64.b64decode(image_base64.split(",")[1])  # Remove base64 header
-        transformed_image = transform_image(image_data)
-        st.write({"transformed_image": f"data:image/png;base64,{transformed_image}"})
+    # Overlay the PNG onto the captured image
+    overlay_image_alpha(img, overlay_img, pos, overlay_alpha)
 
-# Add a hidden function call that runs on page load
-st.experimental_set_query_params(image=st.text_input("Paste the image data here", value=""))
-
-# Process the image if we have one
-if st.experimental_get_query_params():
-    process_image()
+    # Display the image with the overlay
+    st.image(img, channels="RGB")
