@@ -1,7 +1,25 @@
 import streamlit as st
 import streamlit.components.v1 as components
+import base64
+from io import BytesIO
+from PIL import Image
+import numpy as np
 
-# Custom HTML for webcam and SVG overlay
+# Function to apply transformations to the image
+def transform_image(image_data):
+    img = Image.open(BytesIO(image_data))
+    
+    # Example transformation: Convert the image to grayscale
+    grayscale_img = img.convert('L')
+    
+    # Convert the transformed image back to base64 for display
+    buffered = BytesIO()
+    grayscale_img.save(buffered, format="PNG")
+    img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+    
+    return img_str
+
+# JavaScript/HTML code for webcam capture with SVG overlay
 html_code = '''
 <!DOCTYPE html>
 <html lang="en">
@@ -58,7 +76,7 @@ html_code = '''
         <video id="video" autoplay playsinline></video>
         <canvas id="canvas" style="display: none;"></canvas>
 
-        <!-- Inline SVG Overlay with human head outline -->
+        <!-- Inline SVG Overlay -->
         <svg id="svg-overlay" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
             <g><path style="opacity:1" fill="#fe0000" d="M 329.5,230.5 C 328.3,236.04 326.633,241.54 324.5,247..."></path></g>
         </svg>
@@ -80,14 +98,25 @@ html_code = '''
             video.srcObject = stream;
         });
 
-        captureButton.addEventListener('click', () => {
+        captureButton.addEventListener('click', async () => {
             const context = canvas.getContext('2d');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Convert canvas to base64
             const dataUrl = canvas.toDataURL('image/png');
+
+            // Send image to Streamlit for processing
+            const response = await fetch('/process_image', {
+                method: 'POST',
+                body: JSON.stringify({ image: dataUrl }),
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            const result = await response.json();
             const img = document.createElement('img');
-            img.src = dataUrl;
+            img.src = result.transformed_image;
             capturedImages.appendChild(img);
         });
     </script>
@@ -97,3 +126,20 @@ html_code = '''
 
 # Display the HTML with webcam and overlay
 components.html(html_code, height=700)
+
+# Process the captured image from JavaScript
+def process_image():
+    data = st.experimental_get_query_params()  # Simulate endpoint
+
+    if "image" in data:
+        image_base64 = data["image"][0]
+        image_data = base64.b64decode(image_base64.split(",")[1])  # Remove base64 header
+        transformed_image = transform_image(image_data)
+        st.write({"transformed_image": f"data:image/png;base64,{transformed_image}"})
+
+# Add a hidden function call that runs on page load
+st.experimental_set_query_params(image=st.text_input("Paste the image data here", value=""))
+
+# Process the image if we have one
+if st.experimental_get_query_params():
+    process_image()
