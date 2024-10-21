@@ -35,9 +35,6 @@ st.markdown(
     """
     <style>
     video {
-        position: relative;
-    }
-    .video-overlay {
         position: absolute;
         top: 0;
         left: 0;
