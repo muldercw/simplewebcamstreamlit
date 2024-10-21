@@ -30,6 +30,28 @@ def overlay_image_alpha(img, img_overlay, pos, alpha_mask):
 
 st.title("Webcam with Transparent PNG Overlay")
 
+# Add custom CSS to overlay an image on all video elements
+st.markdown(
+    """
+    <style>
+    video {
+        position: relative;
+    }
+    .video-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: url('outline.png') no-repeat center center;
+        background-size: contain;
+        pointer-events: none; /* Allow clicks to pass through */
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 # Checkbox to enable/disable the camera
 enable = st.checkbox("Enable camera")
 
