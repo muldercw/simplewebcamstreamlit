@@ -2,7 +2,7 @@ import streamlit as st
 import cv2
 import numpy as np
 from PIL import Image
-
+overlay_path = "outline.png"
 def overlay_image_alpha(img, img_overlay, pos, alpha_mask):
     """Overlay `img_overlay` on top of `img` at the position `pos` and blend using `alpha_mask`."""
     x, y = pos
@@ -18,7 +18,7 @@ def overlay_image_alpha(img, img_overlay, pos, alpha_mask):
     # Exit if there's nothing to overlay
     if y1 >= y2 or x1 >= x2 or y1o >= y2o or x1o >= x2o:
         return
-
+    
     # Blend overlay within the determined range
     img_crop = img[y1:y2, x1:x2]
     img_overlay_crop = img_overlay[y1o:y2o, x1o:x2o]
@@ -41,7 +41,7 @@ if webcam_input:
     img = np.array(img)
 
     # Load your transparent PNG image
-    overlay = Image.open("overlay_image.png").convert("RGBA")
+    overlay = Image.open(overlay_path).convert("RGBA")
     overlay = np.array(overlay)
 
     # Separate the color and alpha channels of the PNG image
