@@ -1,33 +1,99 @@
 import streamlit as st
-import cv2
-import numpy as np
-from PIL import Image
+import streamlit.components.v1 as components
 
-# Checkbox to enable/disable the camera
-enable = st.checkbox("Enable camera")
+# Custom HTML for webcam and SVG overlay
+html_code = '''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webcam Capture with SVG Overlay</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        #camera {
+            position: relative;
+        }
+        video, canvas {
+            width: 100%;
+            max-width: 500px;
+        }
+        #svg-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        #controls {
+            display: flex;
+            justify-content: center;
+            margin-top: 10px;
+        }
+        #capture {
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+        #captured-images {
+            margin-top: 20px;
+        }
+        #captured-images img {
+            display: block;
+            max-width: 500px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="camera">
+        <video id="video" autoplay playsinline></video>
+        <canvas id="canvas" style="display: none;"></canvas>
 
-# Capture a frame from the webcam, disabled if the checkbox is not checked
-webcam_input = st.camera_input("Capture a frame from your webcam:", disabled=not enable)
+        <!-- Inline SVG Overlay with human head outline -->
+        <svg id="svg-overlay" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+            <g><path style="opacity:1" fill="#fe0000" d="M 329.5,230.5 C 328.3,236.04 326.633,241.54 324.5,247..."></path></g>
+        </svg>
+    </div>
 
-# If a frame is captured, apply the circle overlay and display it
-if webcam_input:
-    # Convert the webcam input to an OpenCV image
-    img = Image.open(webcam_input)
-    img = np.array(img)
+    <div id="controls">
+        <button id="capture">Capture</button>
+    </div>
 
-    # Get the dimensions of the image
-    height, width, _ = img.shape
+    <div id="captured-images"></div>
 
-    # Define the center and radius for the circle
-    center = (width // 2, height // 2)
-    radius = min(height, width) // 4
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const captureButton = document.getElementById('capture');
+        const capturedImages = document.getElementById('captured-images');
 
-    # Define the color (BGR format for OpenCV)
-    color = (0, 255, 0)  # Green color
-    thickness = 5  # Thickness of the circle
+        navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+            video.srcObject = stream;
+        });
 
-    # Draw the circle on the image
-    img_with_circle = cv2.circle(img.copy(), center, radius, color, thickness)
+        captureButton.addEventListener('click', () => {
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/png');
+            const img = document.createElement('img');
+            img.src = dataUrl;
+            capturedImages.appendChild(img);
+        });
+    </script>
+</body>
+</html>
+'''
 
-    # Display the image with the overlayed circle
-    st.image(img_with_circle, channels="RGB")
+# Display the HTML with webcam and overlay
+components.html(html_code, height=700)
